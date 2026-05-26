@@ -1,0 +1,154 @@
+name: Verify install on PR
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  fixture-smoke-install:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install jq + curl + tar
+        run: sudo apt-get update && sudo apt-get install -y jq curl tar
+
+      - name: Build mock-ollama image
+        run: |
+          docker build -t mock-ollama:ci tests/fixtures/mock-ollama/
+
+      - name: Start mock-ollama on the runner host
+        # Bind explicitly to 11434 on the runner. Compose containers reach
+        # this via host.docker.internal:host-gateway (declared in
+        # docker-compose.yml). 127.0.0.1 from inside the container would
+        # be the container's OWN loopback, NOT the runner — that's why
+        # OLLAMA_BASE_URL below uses host.docker.internal, not 127.0.0.1.
+        run: |
+          docker run -d --name mock-ollama -p 11434:11434 mock-ollama:ci
+          sleep 3
+          curl -sf http://127.0.0.1:11434/api/tags | jq .   # runner-side probe
+
+      - name: Stage fixture corpus as ./corpus
+        run: |
+          cp -r tests/fixtures/corpus ./corpus
+
+      - name: Write a CI .env
+        # Containers reach the host runner's published port 11434 via
+        # host.docker.internal (resolves to host-gateway per compose's
+        # extra_hosts directive). Using 127.0.0.1 here would point at
+        # the retrieval-server container's own loopback and fail.
+        run: |
+          cat > .env <<EOF
+          OLLAMA_BASE_URL=http://host.docker.internal:11434
+          WEBUI_SECRET_KEY=$(openssl rand -hex 32)
+          INFERENCE_LOCAL_MODEL=gpt-oss:20b
+          EOF
+
+      - name: Resolve retrieval-server image for CI
+        # The distribution repo's docker-compose.yml uses a placeholder SHA
+        # that real releases bump via the operator-repo build workflow. CI
+        # needs a real image to pull. Two valid sources, checked in order:
+        #   1. Repo variable CI_RETRIEVAL_IMAGE — explicit override set by
+        #      the operator (e.g. ghcr.io/<owner>/community-brain-retrieval@sha256:...)
+        #   2. The :latest tag for the operator's published image.
+        # If neither resolves to a pullable image, fail loudly with a
+        # bootstrap-friendly message (the very first CI run pre-image-publish
+        # is expected to fail; that's documented in the milestone checkpoint).
+        id: resolve_image
+        env:
+          CI_RETRIEVAL_IMAGE: ${{ vars.CI_RETRIEVAL_IMAGE }}
+          OWNER: ${{ github.repository_owner }}
+        run: |
+          if [[ -n "${CI_RETRIEVAL_IMAGE}" ]]; then
+              IMAGE="${CI_RETRIEVAL_IMAGE}"
+              echo "Using CI_RETRIEVAL_IMAGE repo variable: ${IMAGE}"
+          else
+              IMAGE="ghcr.io/${OWNER}/community-brain-retrieval:latest"
+              echo "Falling back to :latest tag: ${IMAGE}"
+          fi
+
+          # Probe pullability — fail fast if the image doesn't exist.
+          if ! docker manifest inspect "${IMAGE}" >/dev/null 2>&1; then
+              echo "::error::Image ${IMAGE} is not pullable."
+              echo "::error::On first run before any retrieval image is published,"
+              echo "::error::publish tier-b-retrieval-v0.0.0-rc1 from the operator"
+              echo "::error::repo first, then set the CI_RETRIEVAL_IMAGE repo variable"
+              echo "::error::(Settings → Variables → Actions) to its @sha256 digest."
+              exit 1
+          fi
+          echo "image=${IMAGE}" >> "$GITHUB_OUTPUT"
+
+      - name: Patch docker-compose for CI
+        env:
+          RESOLVED_IMAGE: ${{ steps.resolve_image.outputs.image }}
+        run: |
+          # Replace retrieval-server image line with the resolved image.
+          python3 - <<PYEOF
+          import re, pathlib, os
+          resolved = os.environ["RESOLVED_IMAGE"]
+          p = pathlib.Path("docker-compose.yml")
+          s = p.read_text()
+          s = re.sub(
+              r"image:\s*ghcr\.io/[^/\s]+/community-brain-retrieval@sha256:[A-Za-z0-9_]+",
+              f"image: {resolved}",
+              s,
+          )
+          # OWUI: any known stable tag for CI; not exercising alembic depth here.
+          s = re.sub(
+              r"image:\s*ghcr\.io/open-webui/open-webui@sha256:[A-Za-z0-9_]+",
+              "image: ghcr.io/open-webui/open-webui:main",
+              s,
+          )
+          p.write_text(s)
+          PYEOF
+
+          # OLLAMA_BASE_URL is already set in .env (Write a CI .env step
+          # earlier in this job) to host.docker.internal:11434, which is
+          # how the retrieval-server container reaches the mock-ollama
+          # process published on the runner host's port 11434.
+
+      - name: docker compose up
+        run: |
+          docker compose pull
+          docker compose up -d
+          sleep 5
+          docker compose ps
+
+      - name: Run verify-install.sh --post-install
+        run: |
+          chmod +x verify-install.sh
+          ./verify-install.sh --post-install
+
+      - name: Verify route shape (distribution mode)
+        run: |
+          # /ingest should 404 (route removed in distribution mode)
+          status=$(curl -s -o /dev/null -w '%{http_code}' \
+              -X POST http://127.0.0.1:8999/ingest -d '{}')
+          if [[ "$status" != "404" ]]; then
+              echo "ERROR: /ingest returned $status, expected 404"
+              exit 1
+          fi
+          # /reindex should 404
+          status=$(curl -s -o /dev/null -w '%{http_code}' \
+              -X POST http://127.0.0.1:8999/reindex -d '{}')
+          if [[ "$status" != "404" ]]; then
+              echo "ERROR: /reindex returned $status, expected 404"
+              exit 1
+          fi
+          echo "OK: write routes are absent"
+
+      - name: Dump logs on failure
+        if: failure()
+        run: |
+          docker compose logs retrieval-server || true
+          docker compose logs open-webui || true
+          docker logs mock-ollama || true
+
+      - name: Cleanup
+        if: always()
+        run: |
+          docker compose down --volumes || true
+          docker stop mock-ollama || true
+          docker rm mock-ollama || true
