@@ -1,0 +1,51 @@
+# Community Brain — Tier B Distribution
+# ----------------------------------------------------------------------
+# Self-host stack for recipients. All services bind to 127.0.0.1 only.
+# Image SHAs are pinned for reproducibility; CI bumps them via PR when
+# the operator cuts a new release.
+
+services:
+  retrieval-server:
+    # SHA bumped by .github/workflows/build-retrieval-image.yml in the
+    # operator repo on `tier-b-retrieval-v*` tag.
+    image: ghcr.io/hopchouinard/community-brain-retrieval@sha256:PLACEHOLDER_BUMPED_BY_CI
+    environment:
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL}
+      COMMUNITY_BRAIN_EMBED_MODEL: ${COMMUNITY_BRAIN_EMBED_MODEL:-nomic-embed-text}
+      COMMUNITY_BRAIN_DISTRIBUTION_MODE: "true"
+      LANCEDB_PATH: /data/lancedb/nomic-v1
+    volumes:
+      # Corpus directory: ./corpus/lancedb/nomic-v1/chunks.lance/...
+      # Mounts at /data so LANCEDB_PATH resolves correctly.
+      # Read-only: distribution-mode server expects clean v3 state and
+      # never writes (no /ingest, no /reindex, no index repair).
+      - ./corpus:/data:ro
+    ports:
+      - "127.0.0.1:8999:8999"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
+  open-webui:
+    # SHA pinned manually by operator (Flow C). Bumping requires
+    # confirming alembic migrations don't break the filter.
+    image: ghcr.io/open-webui/open-webui@sha256:PLACEHOLDER_OWUI_SHA
+    # env_file passes .env contents directly. Commented-out variables in
+    # .env simply don't enter the container env, so OWUI's defaults
+    # apply. Required values are forced via shell-substitution below
+    # for fail-fast behavior.
+    env_file:
+      - .env
+    environment:
+      WEBUI_SECRET_KEY: ${WEBUI_SECRET_KEY:?WEBUI_SECRET_KEY must be set in .env}
+    volumes:
+      - open-webui-data:/app/backend/data
+    ports:
+      - "127.0.0.1:3000:8080"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
+volumes:
+  open-webui-data:
+    external: false
