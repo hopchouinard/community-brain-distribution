@@ -1,0 +1,16 @@
+# Recipient-local state (anchored to repo root with leading slash so
+# they don't accidentally match nested fixture directories like
+# tests/fixtures/corpus/).
+/.env
+/corpus/
+/corpus.previous/
+/open-webui-data/
+
+# Python local-dev artifacts (only relevant if recipients muck around)
+__pycache__/
+*.pyc
+.venv/
+
+# OS noise
+.DS_Store
+Thumbs.db
