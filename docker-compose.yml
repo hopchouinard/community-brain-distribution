@@ -8,7 +8,7 @@ services:
   retrieval-server:
     # SHA bumped by .github/workflows/build-retrieval-image.yml in the
     # operator repo on `tier-b-retrieval-v*` tag.
-    image: ghcr.io/hopchouinard/community-brain-retrieval@sha256:PLACEHOLDER_BUMPED_BY_CI
+    image: ghcr.io/hopchouinard/community-brain-retrieval@sha256:bb0aae539174f967bb6393367a370e6733417de0548095233de16cf7ae3001e3
     environment:
       OLLAMA_BASE_URL: ${OLLAMA_BASE_URL}
       COMMUNITY_BRAIN_EMBED_MODEL: ${COMMUNITY_BRAIN_EMBED_MODEL:-nomic-embed-text}
