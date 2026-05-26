@@ -113,8 +113,24 @@ jobs:
         run: |
           docker compose pull
           docker compose up -d
-          sleep 5
           docker compose ps
+
+      - name: Wait for Open WebUI to be reachable
+        # OWUI cold-boot on a CI runner can take 30-60s (DB init, migrations,
+        # asset compile). Poll until /127.0.0.1:3000/health returns 200 or 90s
+        # elapses. retrieval-server is ready in seconds and is checked by
+        # verify-install.sh directly.
+        run: |
+          for i in $(seq 1 45); do
+              if curl -sf http://127.0.0.1:3000 -o /dev/null; then
+                  echo "OWUI ready after ${i} x 2s"
+                  exit 0
+              fi
+              sleep 2
+          done
+          echo "OWUI did not become reachable within 90s"
+          docker compose logs open-webui | tail -50
+          exit 1
 
       - name: Run verify-install.sh --post-install
         run: |
