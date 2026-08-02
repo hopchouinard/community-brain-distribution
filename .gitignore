@@ -2,6 +2,12 @@
 # they don't accidentally match nested fixture directories like
 # tests/fixtures/corpus/).
 /.env
+# Any .env variant, not just the anchored one. A working copy of this PUBLIC
+# repo was found on 2026-08-02 carrying an untracked `.env.test` holding a
+# WEBUI_SECRET_KEY — not committed, but one `git add .` away from being so,
+# because only the anchored `/.env` was ignored.
+.env.*
+!.env.example
 /corpus/
 /corpus.previous/
 /open-webui-data/
