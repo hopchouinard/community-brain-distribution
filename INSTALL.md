@@ -219,6 +219,24 @@ Workspace → Functions → Import Function.
   - Toggle it ON globally, OR
   - Attach it to the `community-brain` model from Step 8b.
 
+### 8d. Configure the filter valves
+
+Open the filter's valve settings (the gear icon next to it in Workspace →
+Functions).
+
+- `retrieval_url` — defaults to `http://host.docker.internal:8999/query`,
+  which is correct for this compose stack. Leave it unless you moved the
+  retrieval server.
+- `api_key` — leave empty unless you put an authenticating proxy in front of
+  the retrieval server.
+- `citation_guard` (new in v1.1.0) — `annotate` (default: appends an automated
+  "Grounding check" warning when the model cites session dates or sources that
+  are not in the retrieved context), `strip` (also redacts those tokens), or
+  `off`.
+
+> **Re-uploading the filter resets ALL valves to their defaults.** Re-set
+> `retrieval_url`, `api_key`, and `citation_guard` after every upload.
+
 ---
 
 ## 9. End-to-end validation
@@ -264,3 +282,8 @@ docker compose pull                     # grab new image SHAs from compose.yml
 docker compose up -d                    # restart with new images
 ./verify-install.sh --post-install      # confirm green
 ```
+
+6. If the release notes say the filter changed, re-upload
+   `community_brain_filter.py` in Open WebUI and re-set its valves (Step 8d).
+   **v1.1.0 changed the filter** — this step is required when upgrading from
+   v1.0.0.
