@@ -10,8 +10,8 @@
 set -euo pipefail
 
 # === Pinned by operator on each corpus release ===
-CORPUS_VERSION="v1.0.0"
-EXPECTED_SHA256="4947745526bcaabc4a5a4d84c461d3956c33aa37b493f8f4b7543d747ef1c6d0"
+CORPUS_VERSION="v1.1.0"
+EXPECTED_SHA256="157f3981262b2ebadab3004c0431fc760ebfe1ac28597c5167a856c6162ef41b"
 RELEASE_REPO="hopchouinard/community-brain-distribution"
 # =================================================
 

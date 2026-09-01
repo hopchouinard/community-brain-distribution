@@ -8,7 +8,7 @@ services:
   retrieval-server:
     # SHA bumped by .github/workflows/build-retrieval-image.yml in the
     # operator repo on `tier-b-retrieval-v*` tag.
-    image: ghcr.io/hopchouinard/community-brain-retrieval@sha256:bb0aae539174f967bb6393367a370e6733417de0548095233de16cf7ae3001e3
+    image: ghcr.io/hopchouinard/community-brain-retrieval@sha256:ceb3b08de5947b3c0c9e458ce50c8d28111b4df1d818ad1fabb0add5d39765c4
     environment:
       OLLAMA_BASE_URL: ${OLLAMA_BASE_URL}
       COMMUNITY_BRAIN_EMBED_MODEL: ${COMMUNITY_BRAIN_EMBED_MODEL:-nomic-embed-text}
@@ -29,7 +29,12 @@ services:
   open-webui:
     # SHA pinned manually by operator (Flow C). Bumping requires
     # confirming alembic migrations don't break the filter.
-    image: ghcr.io/open-webui/open-webui@sha256:PLACEHOLDER_OWUI_SHA
+    # Currently v0.6.43 (multi-arch amd64+arm64 manifest list).
+    # v1.0.0 shipped an unfilled PLACEHOLDER_OWUI_SHA here, which made
+    # `docker compose up -d` fail at INSTALL.md step 7 for every user
+    # ("invalid reference format"). CI never caught it because
+    # verify-on-pr.yml rewrites this line to :main before running compose.
+    image: ghcr.io/open-webui/open-webui@sha256:9cb724e0bc84f05ba2f81a3da5f53f5add07e1001065d83f3b6b70b9a9eeef19
     # env_file passes .env contents directly. Commented-out variables in
     # .env simply don't enter the container env, so OWUI's defaults
     # apply. Required values are forced via shell-substitution below
