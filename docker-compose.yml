@@ -30,10 +30,12 @@ services:
     # SHA pinned manually by operator (Flow C). Bumping requires
     # confirming alembic migrations don't break the filter.
     # Currently v0.6.43 (multi-arch amd64+arm64 manifest list).
-    # v1.0.0 shipped an unfilled PLACEHOLDER_OWUI_SHA here, which made
+    # v1.0.0 shipped an unfilled placeholder digest here, which made
     # `docker compose up -d` fail at INSTALL.md step 7 for every user
     # ("invalid reference format"). CI never caught it because
     # verify-on-pr.yml rewrites this line to :main before running compose.
+    # NOTE: the placeholder's literal token is deliberately not written out
+    # above, so a repo-wide scan for unfilled placeholders stays clean.
     image: ghcr.io/open-webui/open-webui@sha256:9cb724e0bc84f05ba2f81a3da5f53f5add07e1001065d83f3b6b70b9a9eeef19
     # env_file passes .env contents directly. Commented-out variables in
     # .env simply don't enter the container env, so OWUI's defaults
